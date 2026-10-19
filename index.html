@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>寻宝大冒险 · async/await 动画演示</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect x='3.5' y='9' width='17' height='11' rx='1.6' fill='%23DFA73C'/%3E%3Cpath d='M3.5 9A4.5 4.5 0 0 1 8 4.5h8A4.5 4.5 0 0 1 20.5 9' fill='none' stroke='%23F5C95F' stroke-width='1.8'/%3E%3Ccircle cx='12' cy='12' r='1.4' fill='%2333291B'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="https://miaoda.feishu.cn/fonts/css2?family=Noto+Serif+SC:wght@600;700;900&family=Noto+Sans+SC:wght@400;500;700&display=swap">
+<style>
+/* ===== 基础 ===== */
+:root{
+  --bg:#0F1612;
+  --bg-2:#18221B;
+  --paper:#F3E9D2;
+  --ink:#33291B;
+  --gold:#DFA73C;
+  --gold-hi:#F5C95F;
+  --teal:#4E9A86;
+  --danger:#C75B45;
+  --line:rgba(243,233,210,.16);
+  --muted:rgba(243,233,210,.64);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%}
+body{
+  font-family:"Noto Sans SC","Microsoft YaHei",system-ui,sans-serif;
+  background:var(--bg);
+  color:var(--paper);
+  min-height:100vh;
+  background-image:
+    radial-gradient(1px 1px at 12% 18%, rgba(243,233,210,.5), transparent 60%),
+    radial-gradient(1px 1px at 68% 8%, rgba(243,233,210,.45), transparent 60%),
+    radial-gradient(1.5px 1.5px at 82% 34%, rgba(243,233,210,.4), transparent 60%),
+    radial-gradient(1px 1px at 30% 62%, rgba(243,233,210,.35), transparent 60%),
+    radial-gradient(1.5px 1.5px at 90% 78%, rgba(243,233,210,.3), transparent 60%),
+    radial-gradient(1px 1px at 6% 86%, rgba(243,233,210,.35), transparent 60%),
+    linear-gradient(180deg,var(--bg),var(--bg-2));
+  background-attachment:fixed;
+  line-height:1.7;
+}
+.page{max-width:1060px;margin:0 auto;padding:clamp(14px,3vw,32px) 16px 40px}
+
+/* ===== 头部 ===== */
+header{text-align:center;margin-bottom:clamp(14px,2.5vw,24px)}
+.kicker{
+  display:inline-flex;align-items:center;gap:8px;
+  font-size:12px;letter-spacing:.24em;color:var(--gold);
+  border:1px solid rgba(223,167,60,.4);border-radius:999px;
+  padding:3px 14px;margin-bottom:10px;
+}
+h1{
+  font-family:"Noto Serif SC","SimSun",serif;
+  font-size:clamp(28px,5.5vw,48px);font-weight:900;
+  letter-spacing:.06em;color:var(--gold-hi);
+  text-shadow:0 2px 24px rgba(223,167,60,.35);
+}
+.sub{color:var(--muted);font-size:clamp(13px,2vw,14.5px);margin-top:6px}
+.btn{
+  appearance:none;border:none;cursor:pointer;
+  font-family:inherit;font-weight:700;font-size:16px;
+  min-height:46px;padding:10px 30px;border-radius:999px;
+  background:linear-gradient(180deg,var(--gold-hi),var(--gold));
+  color:var(--ink);box-shadow:0 6px 22px rgba(223,167,60,.35);
+  transition:transform .15s ease, box-shadow .15s ease, filter .15s ease;
+}
+.btn:hover{filter:brightness(1.06);transform:translateY(-1px)}
+.btn:active{transform:translateY(1px)}
+.btn:disabled{opacity:.45;cursor:not-allowed;transform:none;filter:grayscale(.3)}
+.btn.ghost{background:transparent;color:var(--paper);border:1px solid var(--line);box-shadow:none}
+.btn.ghost:hover{border-color:var(--gold);color:var(--gold-hi)}
+.btn.danger-ghost{background:transparent;color:#E0A08F;border:1px solid rgba(199,91,69,.55);box-shadow:none}
+.btn.danger-ghost:hover{border-color:var(--danger);color:#F0B8A8}
+:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+.head-actions{margin-top:14px;display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+
+/* ===== 场景舞台 ===== */
+.stage-wrap{margin:0 auto;max-width:1000px}
+.scene-frame{
+  position:relative;
+  aspect-ratio:16/9;
+  width:100%;
+  border-radius:16px;
+  overflow:hidden;
+  background:#0B100D;
+  box-shadow:0 24px 70px rgba(0,0,0,.5), inset 0 0 0 1px rgba(255,248,224,.16);
+}
+.scene-img{
+  position:absolute;inset:0;width:100%;height:100%;
+  object-fit:cover;display:block;
+  opacity:0;transform:scale(1.05);
+  transition:opacity .9s ease, transform 7s ease-out;
+  will-change:opacity,transform;
+}
+.scene-img.active{opacity:1;transform:scale(1.12)}
+.scene-img.active.zoomin{animation:kenburns 7s ease-out forwards}
+@keyframes kenburns{from{transform:scale(1)}to{transform:scale(1.12)}}
+
+/* 氛围特效层 */
+.fx{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.fx .vignette{
+  position:absolute;inset:0;
+  background:radial-gradient(ellipse at center, transparent 52%, rgba(8,12,10,.5) 100%);
+}
+.fx .fog{
+  position:absolute;left:-30%;top:8%;width:160%;height:46%;
+  background:linear-gradient(90deg, transparent, rgba(230,225,205,.16) 30%, rgba(230,225,205,.22) 55%, transparent);
+  filter:blur(22px);
+  animation:fogDrift 16s linear infinite;
+  opacity:.7;
+}
+.fx .fog.f2{top:46%;animation-duration:22s;animation-delay:-8s;opacity:.5}
+@keyframes fogDrift{from{transform:translateX(0)}to{transform:translateX(42%)}}
+.fx .rays{
+  position:absolute;left:46%;top:-20%;width:42%;height:90%;
+  background:linear-gradient(180deg, rgba(255,230,160,.16), transparent 70%);
+  transform:rotate(14deg);filter:blur(10px);
+  animation:rayPulse 6s ease-in-out infinite;
+}
+@keyframes rayPulse{0%,100%{opacity:.5}50%{opacity:1}}
+.fx .spark{position:absolute;width:5px;height:5px;border-radius:50%;background:#FFE9A8;animation:sparkFloat 7s ease-in-out infinite;opacity:0}
+@keyframes sparkFloat{
+  0%{transform:translateY(0);opacity:0}
+  15%{opacity:.9}
+  100%{transform:translateY(-70px);opacity:0}
+}
+
+/* 标签与页码 */
+.scene-tag{
+  position:absolute;top:14px;left:14px;z-index:5;
+  display:flex;align-items:center;gap:8px;
+  background:rgba(20,26,22,.66);color:var(--gold-hi);
+  border:1px solid rgba(245,201,95,.4);
+  border-radius:999px;padding:5px 14px;
+  font-family:"Noto Serif SC",serif;font-size:14px;font-weight:700;letter-spacing:.06em;
+  backdrop-filter:blur(4px);
+}
+.scene-tag .sno{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:20px;height:20px;border-radius:50%;
+  background:var(--gold);color:var(--ink);font-size:12px;
+}
+.page-no{
+  position:absolute;top:14px;right:14px;z-index:5;
+  font-family:"Noto Serif SC",serif;font-size:14px;letter-spacing:.14em;
+  color:var(--paper);background:rgba(20,26,22,.55);
+  border:1px solid var(--line);border-radius:999px;padding:5px 14px;
+}
+.page-no b{color:var(--gold-hi);font-size:17px}
+
+/* 探险者罗盘 */
+.traveler{
+  position:absolute;z-index:6;left:50%;bottom:16%;
+  width:40px;height:40px;margin-left:-20px;
+  color:#7A5410;filter:drop-shadow(0 3px 8px rgba(0,0,0,.5));
+  opacity:0;transform:translateY(10px);
+  transition:opacity .5s ease, transform .5s ease;
+  pointer-events:none;
+}
+.traveler.visible{opacity:1;transform:translateY(0);animation:bob 2.4s ease-in-out infinite}
+@keyframes bob{0%,100%{margin-top:0}50%{margin-top:-6px}}
+.traveler .halo{
+  position:absolute;inset:-9px;border-radius:50%;
+  border:1.5px dashed rgba(245,201,95,.85);
+  animation:haloSpin 5s linear infinite;
+}
+@keyframes haloSpin{to{transform:rotate(360deg)}}
+
+/* 任务台词卡 */
+.quest-card{
+  position:absolute;left:14px;right:14px;bottom:14px;z-index:6;
+  background:rgba(16,22,18,.72);border:1px solid rgba(243,233,210,.18);
+  border-radius:12px;padding:10px 14px;
+  backdrop-filter:blur(5px);
+  display:flex;gap:12px;align-items:center;
+  min-height:56px;
+}
+.quest-card .q-badge{
+  flex:none;width:34px;height:34px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  background:rgba(223,167,60,.2);border:1px solid var(--gold);
+  color:var(--gold-hi);font-size:14px;font-weight:700;
+}
+.quest-card .q-text{font-size:14.5px;color:var(--paper);line-height:1.6}
+.quest-card .q-state{margin-left:auto;flex:none;font-size:12.5px;font-weight:700;letter-spacing:.1em;display:none;white-space:nowrap}
+.quest-card.ok{border-color:rgba(78,154,134,.65)}
+.quest-card.ok .q-state{display:block;color:#8FD0BC}
+.quest-card.fail{border-color:rgba(199,91,69,.75);animation:cardShake .5s ease}
+.quest-card.fail .q-state{display:block;color:#E8A795}
+@keyframes cardShake{
+  0%,100%{transform:none}
+  20%{transform:translateX(-6px)}40%{transform:translateX(6px)}
+  60%{transform:translateX(-4px)}80%{transform:translateX(4px)}
+}
+.scene-frame.fail-flash{animation:failFlash 1s ease}
+@keyframes failFlash{0%,100%{box-shadow:0 0 0 0 rgba(199,91,69,0), inset 0 0 0 1px rgba(255,248,224,.16)}30%{box-shadow:0 0 40px 8px rgba(199,91,69,.45), inset 0 0 0 1px rgba(255,248,224,.16)}}
+.win-glow{
+  position:absolute;inset:0;z-index:7;pointer-events:none;
+  background:radial-gradient(ellipse at center, rgba(255,220,130,.4), transparent 62%);
+  opacity:0;transition:opacity .8s ease;
+}
+.scene-frame.celebrate .win-glow{opacity:1;animation:golden 1.8s ease-out infinite alternate}
+@keyframes golden{from{opacity:.5}to{opacity:1}}
+
+/* 进度条 */
+.progress{
+  margin:16px auto 0;max-width:1000px;
+  display:grid;grid-template-columns:repeat(4,1fr);gap:10px;
+}
+.chip{
+  display:flex;align-items:center;gap:8px;
+  border:1px solid var(--line);border-radius:10px;
+  padding:8px 10px;min-height:44px;
+  background:rgba(243,233,210,.04);
+  color:var(--muted);font-size:13px;
+  transition:background .3s ease, border-color .3s ease, color .3s ease;
+}
+.chip .ci{
+  flex:none;width:24px;height:24px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  border:1px solid currentColor;font-size:12px;font-weight:700;
+}
+.chip.done{border-color:rgba(223,167,60,.55);background:rgba(223,167,60,.1);color:var(--gold-hi)}
+.chip.active{border-color:var(--gold);background:rgba(223,167,60,.16);color:#FFE7AE;animation:chipPulse 1.4s ease-in-out infinite}
+.chip.fail{border-color:var(--danger);background:rgba(199,91,69,.14);color:#E8A795}
+@keyframes chipPulse{0%,100%{box-shadow:0 0 0 0 rgba(223,167,60,.4)}50%{box-shadow:0 0 0 6px rgba(223,167,60,0)}}
+
+/* 状态与控制 */
+.status{
+  text-align:center;margin:16px auto 0;max-width:760px;
+  font-size:14px;color:var(--muted);min-height:1.6em;
+}
+.status .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--gold);margin-right:8px;vertical-align:middle}
+.status.running .dot{animation:blink 1s ease-in-out infinite}
+@keyframes blink{50%{opacity:.25}}
+.controls{display:flex;gap:12px;justify-content:center;margin-top:14px;flex-wrap:wrap}
+.controls .btn{display:none}
+.controls.show .btn{display:inline-flex}
+.banner{
+  display:none;
+  margin:20px auto 0;max-width:760px;text-align:center;
+  background:linear-gradient(180deg,rgba(245,201,95,.16),rgba(223,167,60,.08));
+  border:1px solid rgba(223,167,60,.55);border-radius:14px;
+  padding:20px 20px;
+}
+.banner.show{display:block;animation:fadeUp .6s ease}
+.banner .b-title{font-family:"Noto Serif SC",serif;font-size:22px;font-weight:900;color:var(--gold-hi);letter-spacing:.1em}
+.banner .b-sub{font-size:14px;color:var(--paper);margin-top:6px}
+.banner .b-stats{font-size:13px;color:var(--muted);margin-top:4px}
+@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+
+/* 代码展示 */
+.code-view{
+  margin:24px auto 0;max-width:760px;
+  border:1px solid var(--line);border-radius:12px;
+  background:rgba(0,0,0,.28);overflow:hidden;
+}
+.code-view summary{
+  cursor:pointer;list-style:none;
+  display:flex;align-items:center;gap:10px;
+  padding:13px 16px;font-size:14px;font-weight:700;color:var(--paper);
+  user-select:none;
+}
+.code-view summary::-webkit-details-marker{display:none}
+.code-view summary::before{
+  content:"";width:8px;height:8px;border-right:2px solid var(--gold);border-bottom:2px solid var(--gold);
+  transform:rotate(-45deg);transition:transform .2s ease;margin-right:2px;
+}
+.code-view[open] summary::before{transform:rotate(45deg)}
+.code-view pre{
+  padding:14px 16px 18px;overflow-x:auto;
+  font-family:Consolas,"Courier New",monospace;font-size:12.5px;line-height:1.65;
+  color:#D8C9A8;border-top:1px solid var(--line);tab-size:2;
+}
+.code-view .cm{color:#8FA08E}
+.code-view .kw{color:#F0B88B}
+.code-view .fn{color:#9CC7B8}
+.code-view .st{color:#E4C77B}
+
+footer{
+  margin-top:28px;text-align:center;font-size:12px;color:rgba(243,233,210,.4);
+  max-width:760px;margin-left:auto;margin-right:auto;
+}
+
+@media (min-width:920px){
+  .progress{grid-template-columns:repeat(8,1fr)}
+  .chip{flex-direction:column;text-align:center;gap:4px;padding:8px 4px;font-size:12px}
+  .chip .ci{width:26px;height:26px}
+}
+
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation:none!important;transition:none!important}
+  .scene-img{transform:none}
+  .traveler{opacity:1}
+  .fx .fog,.fx .rays,.fx .spark{display:none}
+}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header>
+    <div class="kicker">ASYNC / AWAIT ADVENTURE</div>
+    <h1>寻宝大冒险</h1>
+    <p class="sub">八幕异步旅程 · 场景插画版 · 每一幕都在等待中推进，随机遭遇随时可能打断冒险</p>
+    <div class="head-actions">
+      <button id="btnStart" class="btn" type="button">开始寻宝</button>
+    </div>
+  </header>
+
+  <section class="stage-wrap" aria-label="寻宝场景舞台">
+    <div class="scene-frame" id="frame">
+      <img class="scene-img active" id="scene-0" src="assets/scene-1.jpg" alt="第一幕：古老图书馆">
+      <img class="scene-img" id="scene-1" src="assets/scene-2.jpg" alt="第二幕：月光解码">
+      <img class="scene-img" id="scene-2" src="assets/scene-3.jpg" alt="第三幕：穿越迷雾森林">
+      <img class="scene-img" id="scene-3" src="assets/scene-4.jpg" alt="第四幕：鹦鹉指路">
+      <img class="scene-img" id="scene-4" src="assets/scene-5.jpg" alt="第五幕：暗河漂流">
+      <img class="scene-img" id="scene-5" src="assets/scene-6.jpg" alt="第六幕：神庙守卫">
+      <img class="scene-img" id="scene-6" src="assets/scene-7.jpg" alt="第七幕：石门机关">
+      <img class="scene-img" id="scene-7" src="assets/scene-8.jpg" alt="第八幕：开启宝箱">
+
+      <div class="fx" aria-hidden="true">
+        <div class="vignette"></div>
+        <div class="fog"></div>
+        <div class="fog f2"></div>
+        <div class="rays"></div>
+        <span class="spark" style="left:18%;top:64%"></span>
+        <span class="spark" style="left:32%;top:52%;animation-delay:-2s"></span>
+        <span class="spark" style="left:55%;top:70%;animation-delay:-4s"></span>
+        <span class="spark" style="left:72%;top:58%;animation-delay:-1s"></span>
+        <span class="spark" style="left:86%;top:66%;animation-delay:-5s"></span>
+      </div>
+
+      <div class="scene-tag" id="sceneTag"><span class="sno">1</span><span id="sceneName">图书馆寻卷</span></div>
+      <div class="page-no"><b id="pageCur">01</b> / <span id="pageTotal">08</span></div>
+
+      <div class="traveler" id="traveler" aria-hidden="true">
+        <span class="halo"></span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m15.5 8.5-2 5-5 2 2-5 5-2z" fill="currentColor" stroke="none"/></svg>
+      </div>
+
+      <div class="quest-card" id="questCard">
+        <span class="q-badge" id="qBadge">1</span>
+        <span class="q-text" id="qText">点击「开始寻宝」，翻开古老的羊皮卷……</span>
+        <span class="q-state" id="qState">进行中</span>
+      </div>
+
+      <div class="win-glow" aria-hidden="true"></div>
+    </div>
+
+    <div class="progress" id="progress" aria-label="寻宝进度"></div>
+  </section>
+
+  <div class="status" id="status" role="status"><span class="dot"></span><span id="statusText">点击「开始寻宝」，踏上一段异步冒险</span></div>
+
+  <div class="controls" id="controls">
+    <button class="btn" id="btnRetry" type="button">在此关卡重试</button>
+    <button class="btn ghost" id="btnRestart" type="button">从头再来</button>
+  </div>
+
+  <div class="banner" id="banner">
+    <div class="b-title">你找到了传说中的宝藏</div>
+    <div class="b-sub">一整箱会发光的金币，正等着你写进冒险故事</div>
+    <div class="b-stats" id="statsText"></div>
+  </div>
+
+  <details class="code-view">
+    <summary>查看 async/await 寻宝流程代码</summary>
+<pre><code><span class="cm">// 每一幕都是异步任务：Promise + setTimeout 模拟等待</span>
+<span class="kw">const</span> <span class="fn">delay</span> = (ms) =&gt; <span class="kw">new</span> Promise(<span class="fn">res</span> =&gt; setTimeout(res, ms));
+
+<span class="kw">const</span> <span class="fn">playStage</span> = <span class="kw">async</span> (s) =&gt; {
+  <span class="kw">await</span> delay(s.duration);            <span class="cm">// await 等待异步结果</span>
+  <span class="kw">if</span> (Math.random() &lt; s.failRate) {
+    <span class="kw">throw new</span> Error(s.failText);      <span class="cm">// 随机失败 → 抛给 catch</span>
+  }
+  <span class="kw">return</span> s.okText;
+};
+
+<span class="cm">// async/await 串联整段寻宝旅程</span>
+<span class="kw">async function</span> <span class="fn">startAdventure</span>() {
+  <span class="kw">try</span> {
+    <span class="kw">for</span> (<span class="kw">const</span> s <span class="kw">of</span> STAGES) {
+      <span class="kw">const</span> msg = <span class="kw">await</span> playStage(s);   <span class="cm">// 逐幕等待，场景同步切换</span>
+      renderDone(s, msg);
+    }
+    celebrate();                          <span class="cm">// 八幕全通，开启宝箱</span>
+  } <span class="kw">catch</span> (err) {
+    renderFail(err.message);              <span class="cm">// 失败 → 提供重试入口</span>
+  }
+}</code></pre>
+  </details>
+
+  <footer>随机失败概率与 treasure2.js 保持一致（迷雾 30% · 鹦鹉 30% · 暗河 30% · 守卫 50% · 机关 30%）</footer>
+</div>
+
+<script>
+// ===== 八段剧情（与 treasure2.js 一致，每幕配场景插画）=====
+var STAGES = [
+  {key:'clue', name:'图书馆寻卷', icon:'1', img:'assets/scene-1.jpg', duration:1200, failRate:0,
+   ok:'在古老图书馆的书架夹层里，翻出了半张泛黄的羊皮卷……'},
+  {key:'decode', name:'月光解码', icon:'2', img:'assets/scene-2.jpg', duration:1600, failRate:0,
+   ok:'放大镜下古文字逐渐清晰：线索指向迷雾森林深处的神庙……'},
+  {key:'forest', name:'穿越迷雾森林', icon:'3', img:'assets/scene-3.jpg', duration:1800, failRate:0.3,
+   ok:'穿过迷雾森林，月光下神庙的轮廓若隐若现……',
+   fail:'糟糕！迷雾中出现幻象，你原地转了三圈，迷失了方向！'},
+  {key:'parrot', name:'鹦鹉指路', icon:'4', img:'assets/scene-4.jpg', duration:1500, failRate:0.3,
+   ok:'鹦鹉歪着脑袋带路，穿过一片会唱歌的蘑菇林……',
+   fail:'鹦鹉收了面包屑却乱指方向：「嘎嘎！那边！那边！」（其实是反的！）'},
+  {key:'raft', name:'暗河漂流', icon:'5', img:'assets/scene-5.jpg', duration:1800, failRate:0.3,
+   ok:'竹筏稳稳渡过暗河，对岸就是神庙入口……',
+   fail:'竹筏撞上暗礁！河水灌进船舱，你抱着木头顺流漂了回去……'},
+  {key:'temple', name:'神庙守卫', icon:'6', img:'assets/scene-6.jpg', duration:1800, failRate:0.5,
+   ok:'蹑手蹑脚避开守卫，发现一扇刻满符文的石门……',
+   fail:'糟糕！脚步声惊动了神庙守卫，你被请出去喝茶了……'},
+  {key:'gear', name:'石门机关', icon:'7', img:'assets/scene-7.jpg', duration:1500, failRate:0.3,
+   ok:'齿轮咬合，石门轰然打开，金光从门缝涌出……',
+   fail:'机关失灵！齿轮卡在错误的凹槽里，怎么拧都不动……'},
+  {key:'chest', name:'开启宝箱', icon:'8', img:'assets/scene-8.jpg', duration:1200, failRate:0,
+   ok:'恭喜！你找到了传说中的宝藏——一整箱会发光的金币！'}
+];
+
+var $ = function(id){ return document.getElementById(id); };
+var frame = $('frame'), progressEl = $('progress');
+var sceneTag = $('sceneTag'), sceneName = $('sceneName');
+var pageCur = $('pageCur'), pageTotal = $('pageTotal');
+var questCard = $('questCard'), qBadge = $('qBadge'), qText = $('qText'), qState = $('qState');
+var traveler = $('traveler');
+var statusEl = $('status'), statusText = $('statusText');
+var controls = $('controls'), banner = $('banner'), statsText = $('statsText');
+var btnStart = $('btnStart'), btnRetry = $('btnRetry'), btnRestart = $('btnRestart');
+
+var chipEls = [];
+var attempt = 0;
+var running = false;
+var currentIndex = -1;
+
+pageTotal.textContent = STAGES.length;
+
+// 预加载全部场景图
+STAGES.forEach(function(s){
+  var im = new Image();
+  im.src = s.img;
+});
+
+function buildChips(){
+  progressEl.innerHTML = '';
+  chipEls = [];
+  STAGES.forEach(function(s, i){
+    var c = document.createElement('div');
+    c.className = 'chip';
+    c.innerHTML = '<span class="ci">' + s.icon + '</span><span>' + s.name + '</span>';
+    progressEl.appendChild(c);
+    chipEls.push(c);
+  });
+}
+
+function pad(n){ return (n < 10 ? '0' : '') + n; }
+
+function showScene(i){
+  STAGES.forEach(function(s, k){
+    var im = $('scene-' + k);
+    im.classList.toggle('active', k === i);
+    if (k === i){ im.classList.remove('zoomin'); void im.offsetWidth; im.classList.add('zoomin'); }
+  });
+  sceneName.textContent = STAGES[i].name;
+  sceneTag.querySelector('.sno').textContent = STAGES[i].icon;
+  qBadge.textContent = STAGES[i].icon;
+  pageCur.textContent = pad(i + 1);
+}
+
+function setChipState(i, state){
+  var c = chipEls[i];
+  c.classList.remove('active','done','fail');
+  if (state){ c.classList.add(state); }
+}
+
+function resetUI(){
+  banner.classList.remove('show');
+  controls.classList.remove('show');
+  frame.classList.remove('celebrate','fail-flash');
+  questCard.classList.remove('ok','fail');
+  qText.textContent = '冒险即将开始……';
+  qState.textContent = '';
+  currentIndex = -1;
+  traveler.classList.remove('visible');
+  chipEls.forEach(function(c){ c.className = 'chip'; });
+  showScene(0);
+}
+
+function setStatus(text, runningState){
+  statusText.textContent = text;
+  statusEl.classList.toggle('running', !!runningState);
+}
+
+// ===== 异步核心（与代码区展示一致）=====
+function delay(ms){ return new Promise(function(res){ setTimeout(res, ms); }); }
+
+function playStage(s){
+  return delay(s.duration).then(function(){
+    if (Math.random() < s.failRate){
+      throw new Error(s.failText);
+    }
+    return s.okText;
+  });
+}
+
+async function startAdventure(){
+  if (running){ return; }
+  running = true;
+  attempt++;
+  btnStart.disabled = true;
+  resetUI();
+  currentIndex = 0;
+  showScene(0);
+  traveler.classList.add('visible');
+  setStatus('冒险开始：从图书馆出发', true);
+
+  try {
+    for (var i = 0; i < STAGES.length; i++){
+      var s = STAGES[i];
+      currentIndex = i;
+      showScene(i);
+      setChipState(i, 'active');
+      questCard.classList.remove('ok','fail');
+      qState.textContent = '进行中';
+      qText.textContent = s.name + '……';
+      setStatus('第 ' + (i + 1) + ' 幕 · ' + s.name + ' · 进行中……', true);
+
+      var msg = await playStage(s);
+      setChipState(i, 'done');
+      questCard.classList.add('ok');
+      qState.textContent = '成功';
+      qText.textContent = msg;
+    }
+    // 全部通过
+    currentIndex = STAGES.length - 1;
+    setStatus('八幕全通！宝箱已经打开', false);
+    frame.classList.add('celebrate');
+    questCard.classList.add('ok');
+    qState.textContent = '成功';
+    qText.textContent = STAGES[STAGES.length - 1].ok;
+    var secs = Math.max(1, Math.round((STAGES.reduce(function(a, s){ return a + s.duration; }, 0) + 1200) / 1000));
+    banner.classList.add('show');
+    statsText.textContent = '共尝试 ' + attempt + ' 次 · 本局用时约 ' + secs + ' 秒（含动画节奏）';
+    controls.classList.add('show');
+    btnStart.disabled = false;
+    running = false;
+  } catch (err){
+    var failedIndex = currentIndex;
+    setChipState(failedIndex, 'fail');
+    frame.classList.remove('celebrate');
+    frame.classList.add('fail-flash');
+    questCard.classList.add('fail');
+    qState.textContent = '失败';
+    qText.textContent = err.message;
+    setStatus('第 ' + (failedIndex + 1) + ' 幕 · ' + STAGES[failedIndex].name + ' 失败：' + err.message, false);
+    controls.classList.add('show');
+    btnStart.disabled = false;
+    running = false;
+  }
+}
+
+async function retryCurrent(){
+  if (running){ return; }
+  var i = currentIndex;
+  if (i < 0){ return; }
+  running = true;
+  attempt++;
+  btnStart.disabled = true;
+  controls.classList.remove('show');
+  frame.classList.remove('celebrate','fail-flash');
+  chipEls.forEach(function(c, k){ if (k > i){ c.className = 'chip'; } });
+  traveler.classList.add('visible');
+  setStatus('重整旗鼓：重试第 ' + (i + 1) + ' 幕 · ' + STAGES[i].name + '……', true);
+
+  try {
+    for (var j = i; j < STAGES.length; j++){
+      var s = STAGES[j];
+      currentIndex = j;
+      showScene(j);
+      setChipState(j, 'active');
+      questCard.classList.remove('ok','fail');
+      qState.textContent = '进行中';
+      qText.textContent = s.name + '……';
+      setStatus('第 ' + (j + 1) + ' 幕 · ' + s.name + ' · 进行中……', true);
+      var msg = await playStage(s);
+      setChipState(j, 'done');
+      questCard.classList.add('ok');
+      qState.textContent = '成功';
+      qText.textContent = msg;
+    }
+    currentIndex = STAGES.length - 1;
+    setStatus('八幕全通！宝箱已经打开', false);
+    frame.classList.add('celebrate');
+    questCard.classList.add('ok');
+    qState.textContent = '成功';
+    qText.textContent = STAGES[STAGES.length - 1].ok;
+    var secs = Math.max(1, Math.round((STAGES.reduce(function(a, s){ return a + s.duration; }, 0) + 1200) / 1000));
+    banner.classList.add('show');
+    statsText.textContent = '共尝试 ' + attempt + ' 次 · 本局用时约 ' + secs + ' 秒（含动画节奏）';
+    controls.classList.add('show');
+    btnStart.disabled = false;
+    running = false;
+  } catch (err){
+    var failedIndex = currentIndex;
+    setChipState(failedIndex, 'fail');
+    frame.classList.remove('celebrate');
+    frame.classList.add('fail-flash');
+    questCard.classList.add('fail');
+    qState.textContent = '失败';
+    qText.textContent = err.message;
+    setStatus('第 ' + (failedIndex + 1) + ' 幕 · ' + STAGES[failedIndex].name + ' 失败：' + err.message, false);
+    controls.classList.add('show');
+    btnStart.disabled = false;
+    running = false;
+  }
+}
+
+function restart(){
+  if (running){ return; }
+  attempt = 0;
+  resetUI();
+  startAdventure();
+}
+
+btnStart.addEventListener('click', function(){ startAdventure(); });
+btnRetry.addEventListener('click', function(){ retryCurrent(); });
+btnRestart.addEventListener('click', function(){ restart(); });
+
+buildChips();
+showScene(0);
+</script>
+</body>
+</html>
